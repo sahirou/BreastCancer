@@ -1,0 +1,591 @@
+---
+title: "Breast Cancer Diagnosis Prediction"
+subtitle: 'HarvardX Data Science Professional Certificate: PH125.9x, Choose Your Own'
+author: "Mahaman Sani SAHIROU ADAMOU"
+date: "_`r format(Sys.Date(), '%d %B, %Y')`_"
+header-includes:
+  - \usepackage{longtable} \usepackage[nottoc]{tocbibind}  \DeclareUnicodeCharacter{2212}{\textendash}
+output:
+  pdf_document:
+    extra_dependencies: ["float","multicol","subfig"]
+    df_print: kable
+    number_sections: yes
+    toc: true
+    toc_depth: 6
+    fig_caption: yes
+    highlight: pygments
+    keep_tex: true
+  html_document: default
+bibliography: references.bib
+csl: data-science-journal.csl
+fontsize: 11pt
+include-before: '`\newpage{}`{=latex}'
+urlcolor: teal
+---
+
+
+
+<!-- ---------------------------------------------------------------------- -->
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, fig.align = 'center', fig.pos = "H", out.extra = "", cache=FALSE, cache.lazy = FALSE)
+
+## Source main R script BeastCancer.R which provides all the objects 
+## necessary to generate the final PDF report BeastCancer.pdf
+source("BreastCancer.R")
+```
+
+
+
+
+\newpage
+
+
+
+<!-- ---------------------------------------------------------------------- -->
+
+
+
+# Introduction
+
+
+[Breast cancer][linkwikipediabreastcancerfr] is a malignant tumor of the mammary gland. In other words, it is a cancer that is born in the cellular units whose function is to secrete milk, the ducto-lobular units of the breast, essentially in women. Eight out of ten breast cancers occur after the age of 50. First cancer in the world, it affects, in 2016, 1.8 million women per year in the world. One in eight women is expected to be diagnosed with breast cancer in her lifetime.  
+
+A tumor does not mean cancer, it can be benign (not cancerous), pre-malignant (pre-cancerous), or malignant (cancerous). It is now possible to detect tumors very early when they are still very small. This reduces the risk of mortality and allows lighter and less traumatic treatments.  
+
+Tests such as MRI, mammogram, ultrasound and biopsy are commonly used to diagnose breast cancer. Also, machine learning based predictive models promise earlier detection techniques for breast cancer diagnosis. However, making an evaluation for models that efficiently diagnose cancer is still challenging.   
+
+In this project, we proposed data exploratory techniques and developed different predictive models to improve machine learning based breast cancer diagnostic accuracy. 
+
+
+
+<!-- ---------------------------------------------------------------------- -->
+
+
+
+# Getting data   
+
+Our models were implemented on the [**W**isconsin **D**iagnostic **B**reast **C**ancer (WDBC)][linkwdbcdatabase] dataset which consists of 10 features (Table \ref{tab:ten-features-list}) of breast tumor, and the result in the data were taken from `r wdbc_data %>% nrow()` patients, samples of malignant and benign tumor cells. These features were computed from digitized images of breast mass [**F**ine **N**eedle **A**spiration (FNA)][linkfna] and describe characteristics of cells nuclei.
+
+
+```{r ten-features-list}
+.print_tabular_data(
+  df = feature_description,
+  caption = "Description of nucleus features"
+ )
+```
+
+The mean, standard error (SE) and worst or largest (mean of the three largest values) of these features were computed, resulting in 30 features in total for each sample, to which an **ID column** was added to differentiate samples. Finally, the diagnosis result of each sample, which consisted of malignant (M) and benign (B), was also added. In conclusion, the dataset contained 32 attributes (ID, diagnosis, and 30 input features) and `r wdbc_data %>% nrow()` instances.
+
+
+The first column of the dataset, **«`r names(wdbc_data)[1]`»**, was not considered when building our models. The second column, **«`r names(wdbc_data)[2]`»**, is the target of the study, the **outcome** or **dependent variable** that will be predicted by our models. The third to the thirtyth-second columns are the **predictors**.   
+
+
+
+<!-- ---------------------------------------------------------------------- -->
+
+
+
+# Analysis 
+
+## Exploratory data analysis (EDA)  
+
+\begin{multicols}{2}
+```{r diagnosis-distribution, fig.cap="Distribution of «diagnosis»"}
+distribution_of_diagnosis
+```
+\columnbreak  
+\textbf{EDA} help to understand the nature of the dataset, to identify the outliers or correlated variables that are more accessible. To analyze the features and understand their predictive value for diagnosis, we applied feature distribution, correlation coefficient, and so on.      
+
+First of all, we discover that the dataset is a bit unbalanced in its proportions, as we can see on Figure \ref{fig:diagnosis-distribution}.   
+
+This imbalance between benign and malignant samples means that we should probably look beyond overall accuracy in evaluating our models.    
+\end{multicols}
+
+
+
+
+### Descriptive statistics
+
+`r ifelse(any(is.na(wdbc_data)), "There is missing values (NAs) in the WDBC dataset.", "There is no missing values (NAs) in the WDBC dataset.")`   
+
+For each of the predictors, higher values generally indicate a higher likelihood of malignancy as they reflect larger cells and/or more irregular shapes.
+
+Tables **\ref{tab:mean-features-stats}, \ref{tab:se-features-stats} and \ref{tab:worst-features-stats}** summarise the numeric data for each of the features included in the dataset, showing that the range and magnitude of values for each feature vary considerably and would benefit from Z-Score normalization prior to further visualization and use in developing predictive algorithms.   
+
+
+
+```{r mean-features-stats}
+.print_tabular_data(
+  df = .descriptive_statistics(suffix = "_mean$", df = wdbc_data), 
+  caption = "Statistics for the `mean' sufixed features"
+)
+
+```
+
+```{r se-features-stats}
+.print_tabular_data(
+  df = .descriptive_statistics(suffix = "_se$", df = wdbc_data), 
+  caption = "Statistics for the `standard error (se)' sufixed features"
+)
+```
+
+```{r worst-features-stats}
+.print_tabular_data(
+  df = .descriptive_statistics(suffix = "_worst$", df = wdbc_data), 
+  caption = "Statistics for the `worst' sufixed features"
+)
+```
+
+\newpage
+
+### Feature Distribution  
+
+
+From Figure \ref{fig:feature-histogram} and Figure \ref{fig:feature-density-plots}, we can see that the
+data are relatively normally distributed and don’t require transformations. More precisely:    
+
+- concavity, concavity_point, perimeter, radius, area and compactness attributes may have an exponential distribution,
+- texture, smooth and symmetry attributes may have a Gaussian or nearly Gaussian distribution,
+- malignant samples are, on average, larger in size and more abnormal in shape, than benign samples,
+- malignant samples have a greater variance in data than benign samples, 
+- in any of the histograms there are no noticeable large outliers that warrants further cleanup.
+
+
+
+```{r feature-histogram, fig.height = 10, out.width= "100%", fig.cap="Histogram for each feature"}
+# Histogram for each feature
+feature_histogram
+```
+
+
+
+```{r feature-density-plots, fig.height = 10, out.width= "100%", fig.cap="Feature density plots by diagnosis"}
+# Density plots for each feature by diagnosis
+feature_density_plots
+```
+
+
+
+### Feature Correlation  
+
+The Pearson Correlation Coefficient ($-1 \le r \le +1$) calculates the correlation coefficient between two features. Then, the relationship between two features can be determined by categorizing them into three groups: 
+
+- positively correlated features if $r \rightarrow +1$ and so the features move in the same direction, 
+- negatively correlated features if $r \rightarrow -1$ and so the features move in the opposite directions,
+- uncorrelated features otherwise $r \rightarrow 0$, there is no true relationship between them.  
+
+
+We can see from Figure \ref{fig:correlation-heatmap} that:
+
+- the mean area of the tissue nucleus has a strong positive correlation with mean values of radius and parameter (as expected),
+- some parameters are moderately positively correlated (r between 0.5 and 0.75) : concavity and area, concavity and perimeter, and so one,
+- likewise, we see some strong negative correlation between fractal_dimension with radius, texture, parameter mean values. 
+
+It is helpful to understand the degree of correlation between features before deciding which features ton include in the development of a model. In particular, unsupervised methods for predictive modelling can perform better if features that are highly correlated with each other are excluded.
+
+
+
+```{r correlation-heatmap, fig.height = 8, out.width= "100%", fig.cap="Correlation Heatmap"}
+correlation_heatmap
+```
+
+
+
+
+<!-- ---------------------------------------------------------------------- -->
+
+
+## Pre-Processing the data
+
+Here we prepare our data in such way to best expose the structure of the problem to the machine learning algorithms that we intend to use.This involves a number of steps such as:  
+
+- label encoding,
+- taking care of missing data,
+- split data into training and test sets,
+- feature scaling,
+- dimensionality reduction   
+
+
+In this section, we will use tools to find the most predictive features of the data and filter it so it will enhance the predictive power of the analytics models.
+
+First of all, **`r names(wdbc_data)[1]`** is an unique attribute for each patient and it is irrelevant to the process of classification, so it can be removed.  
+
+
+### Label encoding   
+
+We have only one categorical variable in the data set, the dependent variable **`r names(wdbc_data)[2]`** which is encoded as **factor** with 2 levels, one for benign masses (B) and the other for malignant masses (M). 
+
+
+### Taking care of missing data  
+
+As seen in previous sections, `r ifelse(any(is.na(wdbc_data)), "there is missing values (NAs) in the WDBC dataset.", "there is no missing values (NAs) in the WDBC dataset.")`
+
+  
+  
+
+### Split data into training and test sets
+
+The simplest method to evaluate the performance of a machine learning algorithm is to use different training and testing datasets. Here we will:   
+
+- split the available data into a training set and a testing set,
+- train the algorithm on the first part (training set),
+- make predictions on the second part (testing set), and evaluate the predictions against the expected results.     
+
+The size of the split can depend on the size and specifics of the dataset, although it is common to use 80% of the data for training and the remaining 20% for testing.   
+
+The balance of classes was consistent between the training sets (malignant = `r percent(mean(train_set$diagnosis=="M"), accuracy = 0.1)`) and test set (malignant = `r percent(mean(test_set$diagnosis=="M"), accuracy = 0.1)`). Further data exploration was conducted with the training set only.
+
+
+
+
+### Feature scaling 
+
+We have seen over **EDA** sections that our raw data has differing distributions which may have an impact on the most machine learning algorithms. Most machine learning and optimization algorithms behave much better if features are on the same scale.   
+
+So, scaling is a useful technique to transform features to a standard Gaussian distribution with a mean of 0 and a standard deviation of 1.   
+
+When we center and scale a variable in the training data using the mean and sd of that variable calculated on the training data, we are essentially creating a brand-new variable. Then we train our models on that brand new variable.To use that new variable to predict for the validation and/or test datasets, we have to create the same variable in those data sets, by subtracting the same means and dividing by the same standard deviations calculated from the training set.   
+
+
+
+
+### Exploring training set malignant(M) and benign(B) samples   
+
+To measure the variance between samples, we can for example calculate the **euclidean distance**. The average distance between all samples included in the training set was **`r round(avg_distance_all_samples, 2)`**. **Benign** samples were closer to each other (**`r round(avg_distance_b_samples, 2)`**) than **malignant** samples were from each other (**`r round(avg_distance_m_samples, 2)`**), indicating greater variance in the measured features in **malignant** cells. **Benign** samples were also closer to each other than to **malignant** samples (**`r round(avg_distance_bm_samples, 2)`**), indicating that samples are relatively well clustered by class.        
+
+
+
+
+### Exploring training set features         
+
+In this section, we re-explored correlation between features and also explored Principal Component Analysis (PCA).  
+
+
+#### Correlation between training set features   
+
+Here, we tried to understand the degree of correlation between features before deciding which features ton include in the development of a model. In particular, unsupervised methods for predictive modelling can benefit from excluding features that are highly correlated with each other from the training set. 
+
+Overall, there is a low level of correlation between features. Indeed, the mean correlation coefficient of features in the train set is **`r round(mean(train_corr), 2)`**. **`r length(corr)`** features have a correlation of **`r round(cut_off, 2)`** or more, namely **`r combine_words(corr)`**. Excluding these features from unsupervised methods of developing the predictive algorithm may be beneficial.
+
+
+
+
+#### Principal Component Analysis (PCA)   
+
+**PCA** is a technique for transforming data sets in order to reduce dimensionality without reducing the number of features by identifying the principal components which explain as much of the data variance as possible. PCA reduces the dimensions of a dataset by projecting the data onto a lower-dimensional subspace. For example, a 2D dataset could be reduced by projecting the points onto a line. Each instance in the dataset would then be represented by a single value, rather than a pair of values. In a similar way, a 3D dataset could be reduced to two dimensions by projecting variables onto a plane. PCA has the following utilities:
+
+- Compress the data while minimizing the information lost at the same time and, potentially, improve the predictive accuracy of classification models,
+- principal components will be further utilized in the next stage of supervised learning, in Logistic regression, QDA, and so on,
+- understanding the structure of data with hundreds of dimensions can be difficult, hence, by reducing the dimensions to 2D or 3D, observations can be visualized easily.   
+
+
+Table **\ref{tab:first-10-pcs}** shows the standard deviation, proportion of variance and cumulative proportion of variance for the first 10 principal components. The first principal component (PC1) accounts for `r percent(pca.var.per[1], accuracy = 0.1)` of the total variance within the dataset, the first two components account for almost `r percent(sum(pca.var.per[1:2]), accuracy = 0.1)` of the cumulative variance and the first 10 principal components account for more than `r percent(sum(pca.var.per[1:10]), accuracy = 0.1)` of the cumulative variance within the data set. 
+
+```{r first-10-pcs}
+.print_tabular_data(
+  df = as.data.frame(first_10_pcs), 
+  caption = "First 10 Principal Components"
+)
+
+```
+
+Figure **\ref{fig:box-plots-first-10-pcs}** is a series of box plots for each of the first 10 principal components grouped by diagnosis. In most cases the spread is greater for malignant masses than for benign masses. PC1 is the only component for which the interquartile ranges do not overlap. Principal component analysis does not take into account the classification of data, in this case the diagnosis assigned to each sample. 
+
+```{r box-plots-first-10-pcs, out.width= "80%", fig.cap="Box plots of first 10 Principal Components by diagnosis"}
+box_plot_first_10_pcs
+```
+
+
+Figure **\ref{fig:scatter-plot-first-2-pcs}** is a two-dimensional scatter plot of the first two principal components. The graph shows that the malignant data-points are more spread out than the benign data-points and that more of the variance can be accounted for on the $x$-axis (PC1) than on the $y$-axis (PC2). Ellipses help to visualise this even better, firstly with a larger ellipse for malignant data-points than for benign data-points and considerable separation of data by classification, despite some overlap. This analysis support the use of PCA in algorithm development to predict diagnosis from this dataset.
+
+```{r scatter-plot-first-2-pcs, out.width= "80%", fig.cap="Scatter plot of PC1 and PC2 by diagnosis"}
+scatter_plot_first_2_pcs
+```
+
+
+
+<!-- ---------------------------------------------------------------------- -->
+
+
+
+# Model building & evaluation     
+
+Several models are built starting with the simplest. The following key performance metrics for each model developed  are stored in a specific data frame :
+
+
+```{r key-performance-metrics}
+.print_tabular_data(
+  df = metrics_definitions,
+  caption = "Key performance metrics definitions"
+ )
+```
+
+
+
+\begin{equation}
+\mbox{Accuracy} = \frac{\mbox{TP}+{\mbox{TN}}}{\mbox{TP}+{\mbox{TN}}+{\mbox{FP}}+{\mbox{FN}}}
+\end{equation}
+
+
+\begin{equation}
+\mbox{Sensitivity} = \frac{\mbox{TP}}{\mbox{TP + FP}}
+\end{equation}
+
+
+\begin{equation}
+\mbox{Specificity} = \frac{\mbox{TN}}{{\mbox{TN}}+{\mbox{FP}}}
+\end{equation}
+
+
+\begin{equation}
+\mbox{FPR} = \frac{\mbox{FP}}{\mbox{FP + TN}} = \mbox{1 - Specificity}
+\end{equation}
+
+
+\begin{equation}
+\mbox{FNR} = \frac{\mbox{FN}}{\mbox{FN + TP}} = \mbox{1 - Sensitivity}
+\end{equation}
+
+
+
+\begin{equation}
+\mbox{F1 Score} = \frac{\mbox{2(TP)}}{{\mbox{2(TP)}}+{\mbox{FP}}+{\mbox{FN}}}
+\end{equation}
+
+
+
+We used cross-validation, a way of ensuring robustness in the model at the expense of computation. In the ordinary modeling methodology, a model is developed on train data and evaluated on test data. In some extreme cases, train and test might not have been homogeneously selected and some unseen extreme cases might appear in the test data, which will drag down the performance of the model. On the other hand, in cross-validation methodology, data was divided into equal parts and training performed on all the other parts of the data except one part, on which performance will be evaluated. This process repeated as many parts user has chosen. For example in five-fold cross-validation, data will be divided into five parts, subsequently trained on four parts of the data, and tested on the one part of the data. This process will run five times, in order to cover all points in the data. Finally, the error calculated will be the average of all the errors. Cross-validation thus minimizes the risk of overfitting. It is also a useful technique for tuning parameters for those models that require it (for example, to tune the number of neighbours k to include in a k-nearest neighbours model). The [caret package][linkcaret] provides a convenient method for cross-validation that can be defined in advance, using the **trainControl** function and applied to each model as required. Here, the train control parameters were set to apply 10-fold cross-validation, repeated 10 times.   
+
+
+
+<!-- ---------------------------------------------------------------------- -->
+
+
+
+## Random sampling
+
+
+### Simple Random Sample  
+
+The first and simplest model to be tested involved random sampling with equal probability for each outcome, exactly like a perfect coin toss. This method is straightforward and easy to implement, but not very suitable for cases like ours with imbalance in prevalence of benign and malignant samples.
+
+
+
+### Weighted Random Sample  
+
+So, we built a weighted random sample model where the prevalence of each class of samples was used to define the probability of each outcome within the random sample.
+
+
+<!-- ---------------------------------------------------------------------- -->
+
+
+## Unsupervised Learning   
+
+Similar to the teacher-student analogy, in which the instructor does not present and provide feedback to the student and who needs to prepare on his/her own.    
+
+
+### $k$-Means Clustering   
+
+$k$-Means Clustering is the most commonly used unsupervised machine learning algorithm for partitioning a given data set into a set of k groups (k = 2 clusters in our case), where k represents the number of groups pre-specified by the analyst. It classifies objects in multiple groups, such that objects within the same cluster are as similar as possible (high intra-class similarity), whereas objects from different clusters are as dissimilar as possible (low inter-class similarity). In k-means clustering, each cluster is represented by its center (centroid) which corresponds to the mean of points assigned to the cluster.
+
+We can compute k-means in R with the **stats::kmeans** function. Here we grouped the data into two clusters (centers = 2). The kmeans function also has an **nstart** option that attempts multiple initial configurations and reports on the best one. For example, adding **nstart = 25** will generate 25 initial configurations. This approach is often recommended, and helps to introduce stability to the model outcome given that it can be sensitive to the fact that the initial centre is chosen at random.
+
+In practical applications, usually business should be able to provide what would be approximate number of clusters they are looking for. But what if we don't know the number of clusters? Preferably we would like to use the optimal number of clusters. **Elbow Method** is one of the most popular methods for determining these optimal clusters.  The basic idea behind cluster partitioning methods, such as k-means clustering, is to define clusters such that the total intra-cluster variation (known as total within-cluster variation or total within-cluster sum of square) is minimized. Thus, we can use the following algorithm to define the optimal clusters:  
+
+-  compute clustering algorithm (k-means clustering) for different values of k. For instance, by varying k from 1 to 20 clusters,
+-  for each k, calculate the total within-cluster sum of square (wss),
+-  plot the curve of wss according to the number of clusters k,
+-  the location of a bend (knee) in the plot is generally considered as an indicator of the appropriate number of clusters.
+
+The results suggest that **2** is as expected the optimal number of clusters, as it appears to be the bend in the knee (or elbow). 
+
+
+```{r k-means-wss-plot, out.width= "80%", fig.cap="Elbow Method"}
+elbow_method_plot
+```
+
+
+Two version of the $k$-means model were developed. The first used the normalized data from the full training dataset. The second selected out those features which were highly correlated, `r length(corr)` features where the correlation coefficient exceeded the `r round(cut_off, 2)` cutoff defined in the exploratory analysis.
+
+
+<!-- ---------------------------------------------------------------------- -->
+
+
+## Supervised learning  
+
+This is where an instructor provides feedback to a student on whether they have performed well in an examination or not. In which target variable do present and models do get tune to achieve it. Many machine learning methods fall in to this category. Supervised machine learning models can be classified into **discriminative** and **generative** models. In simple words, a discriminative model makes predictions based on conditional probability and is either used for classification or regression. On the other hand, a generative model revolves around the distribution of a dataset to return a probability for a given example.  
+ 
+
+### Generative modelling   
+
+Generative models are supervised machine learning techniques that model how the entire dataset, including both predictors and outcomes are distributed and use the joint probability distribution in order to predict the conditional probability of one outcome or another. The most general generative model is the Naive Bayes model which is based on the Bayes rule, where $f_{\mathbf{X}|Y=1}$ and $f_{\mathbf{X}|Y=0}$ are the distribution functions of the predictor $\mathbf{X}$ with binary outcomes, $Y=1$ and $Y=0$.
+
+
+\begin{equation}
+p\left(\mathbf{x}\right)=\mbox{Pr}\left(Y=1|\mathbf{X}=\mathbf{x}\right)=\frac{f_{\mathbf{X}|Y=1}\left(\mathbf{x}\right)\mbox{Pr}\left(Y=1\right)}{f_{\mathbf{X}|Y=0}\left(\mathbf{x}\right)\mbox{Pr}\left(Y=0\right)+f_{\mathbf{X}|Y=1}\left(\mathbf{x}\right)\mbox{Pr}\left(Y=1\right)}
+\end{equation}
+
+The Naive Bayes model assumes that all features within the dataset are equally important and independent. Whilst this is a naive assumption that is unlikely to be true for a given set of data, it is typically good enough for the purposes of classification. The **nb** method provided in the caret package includes three tuning parameters each of which was tuned using resampling during cross-validation of this model: laplace smoothing (0 or 1), kernel distribution (true or false)  and adjustment (0 or 1). 
+
+Other generative models include Linear Discriminative Analysis (LDA) and Quadratic Discriminative Analysis (QDA). LDA has the benefit of serving to reduce the dimensionality of the data (similarly to PCA) and to classify the data for predictive purposes. LDA assumes that the data are normally distributed and that the correlation structure is the same for all classes.
+
+On the other hand QDA assumes that the distributions are multivariate normal, and cannot be used for dimension reduction but is more useful than LDA where different classes are known to exhibit distinct co-variances. Each of these models were developed to train the normalised train data and predict the outcome using the normalized test data. In addition, the QDA model was also run incorporating the outputs from PCA via caret's pre-processing functionality.
+
+
+
+
+
+### Discriminative modelling   
+
+
+The discriminative model is used particularly for supervised machine learning. Also called a conditional model, it learns the boundaries between classes or labels in a dataset. It creates new instances using probability estimates and maximum likelihood. However, they are not capable of generating new data points. The ultimate goal of discriminative models is to separate one class from another.
+
+
+#### Logistic Regression Model
+
+Logistic regression is one of the most popular Supervised Learning technique which is used for predicting a categorical dependent variable using a given set of independent variables. Therefore the outcome must be a categorical or discrete value. It can be either Yes or No, 0 or 1, True or False, etc. but instead of giving the exact value as 0 and 1, it gives the probabilistic values which lie between 0 and 1. 
+
+Logistic regression is the most commonly used form of generalised linear model (GLM), used for solving classification problems. In Logistic regression, instead of fitting a regression line, we fit an "S" shaped logistic function, which predicts two maximum values (0 or 1). The curve from the logistic function indicates the likelihood of something such as whether the cells are cancerous or not, etc. 
+
+
+
+
+#### $k$-Nearest Neighbors Model  
+
+$k$-Nearest Neighbors is one of the simplest Machine Learning algorithms which assumes the similarity between the new case/data and available cases and put the new case into the category that is most similar to the available categories. $k$NN algorithm stores all the available data and classifies a new data point based on the similarity. This means when new data appears then it can be easily classified into a well suite category by using $k$NN algorithm.
+
+The $k$ in $k$NN is a parameter that refers to the number of nearest neighbors to include in the majority of the voting process. There is no particular way to determine the best value for $k$, so we need to try some values to find the best out of them. A very low value for $k$ such as $k$=1 or $k$=2, can be noisy and lead to the effects of outliers in the model. As with the use of bins in smoothing, larger values of $k$ result in smoother estimates. $k$ is a tuning parameter within the train function for the $k$NN model, and cross-validation within the training set was used to tune a value for $k$ between 1 and 30 in increments of 1 to optimise the model before using it to predict outcome in the testing set.
+
+
+
+
+#### Random Forest Model
+
+Many Machine Leaning algorithms suffer from diminished performance due to multidimensionality of data. As seen in previous sections, PCA can be useful to reduce the number of dimensions required as part of pre-processing of data prior to training an algorithm. Decisions trees are another way to address this issue, effectively partitioning the data such that final predictions can be made on a smaller subset of predictors. 
+
+Random Forest is a supervised Machine Learning algorithm that is constructed from decision tree algorithms, to solve regression and classification problems. It utilizes ensemble learning, which is a technique that combines many classifiers to provide solutions to complex problems. 
+
+Random Forest consists of many decision trees. The **Forest** generated is trained through bagging or bootstrap aggregating. 
+
+Random Forest establishes the outcome based on the predictions of the decision trees. It predicts by taking the average or mean of the output from various trees. Increasing the number of trees increases the precision of the outcome.
+
+Random Forest eradicates the limitations of a decision tree algorithm. It reduces the overfitting of datasets and increases precision. The **rf** method within the caret package was used and the number of randomly selected predictors to include in each decision tree was tuned within the train set using the **mtry** tuning parameter via cross-validation. Other random forest methods also allow for tuning of the minimum number of data points to include in each decision tree but were not utilised here.
+
+
+
+
+#### Neural Networks Model  
+
+Another option for dealing with multidimensional data, and particularly with non-linearity, is Neural Networks Modelling. As such, this type of algorithm has found particular application in dealing with complex machine learning tasks such as image processing, particularly with the multi-layer Neural Networks. The more layered the network, however, the more computational resource it requires and the greater the risk of over-fitting to a training data set. The simplest forms of Neural Network, known as single-layer Neural Networks, are only equipped to deal with linear data. These algorithms take multidimensional inputs ($x_i$), apply a weighting ($w_i$) before summing them in order to classify the output $y_i$.
+
+\begin{equation}
+y_i=\sum_i{w_ix_i}
+\end{equation}
+
+We built our model using the single hidden layer Neural Network method, **nnet** that is available within the caret package. Unlike the simplest Neural Network this model has three layers and, consequently, can handle non-linear data. Whilst tuning parameters to optimise the number of hidden units (size) and weight decay (decay) are available with this method, they were not deployed here.
+
+
+
+
+
+<!-- ---------------------------------------------------------------------- -->
+
+
+
+\newpage
+
+# Results   
+
+The table below provides the key performance metrics for each of the models tested in the project.  
+
+
+```{r model-results-table}
+results_table
+```
+
+
+
+Overall, specificity will be easier to achieve with this data than sensitivity. **`r results %>% filter(Specificity == 1) %>% nrow()`** models achieved a specificity of **1**, but only **`r results %>% filter(Sensitivity == 1) %>% nrow()`** of these achieved the same level of sensitivity.
+
+
+With the worst performance, **Random Sampling (Simple and Weighted)** is definitely not an effective method for predicting diagnosis. The results from these two models reinforce the importance of the F1 Score in evaluating performance of models dealing with imbalanced datasets. Simple Random sampling and Weighted Random Sampling resulted in F1 Scores of `r results %>% filter(Model == "Simple Random Sample") %>% dplyr::select(F1) %>% pull()` and `r results %>% filter(Model == "Weighted Random Sample") %>% dplyr::select(F1) %>% pull()` respectively.
+
+
+$k$-Means Clustering improved accuracy, with an F1 Score of `r results %>% filter(Model == "K-Means Clustering") %>% dplyr::select(F1) %>% pull()` but still not to an acceptable level, with a False Negative Rate of `r results %>% filter(Model == "K-Means Clustering") %>% dplyr::select(FNR) %>% pull() %>% scales::percent(acuracy = 0.1)` and a False Positive Rate of `r results %>% filter(Model == "K-Means Clustering") %>% dplyr::select(FPR) %>% pull() %>% scales::percent(acuracy = 0.1)`. Of note, removing the highly correlated features (those with a correlation coefficient above `r cut_off`) from the dataset reduced the accuracy of the $k$-Means Clustering model, yielding a reduced F1 Score of `r results %>% filter(Model == "K-Means Clustering Without Highly Correlated Features") %>% dplyr::select(F1) %>% pull()` and reducing both the specificity and, in particular, the sensitivity of the model.
+
+
+**Supervised Learning** techniques substantially improved the accuracy of predictions, with each subsequent model achieving an overall accuracy of more than **0.90**. Amongst the generative models, **Naive Bayes** achieved an overall accuracy of `r results %>% filter(Model == "Naive Bayes (NB)") %>% dplyr::select(Accuracy) %>% pull()` and an F1 Score of `r results %>% filter(Model == "Naive Bayes (NB)") %>% dplyr::select(F1) %>% pull()` with a balance of sensitivity and specificity. Of note, the Naive Bayes model performed best when the usekernel parameter was set to `r naive_bayes$bestTune$usekernel` and the associated adjustment was set to `r naive_bayes$bestTune$adjust`, which indicates that a normal Gaussian distribution is not the best way to estimate the conditional probabilities (Figure \ref{fig:cross-validation-tuning-naive-bayes})
+
+```{r cross-validation-tuning-naive-bayes, fig.cap = "Tuning results for Naive Bayes Model during cross-validation"}
+x_validation_tuning_naive_bayes_plot
+```
+
+
+
+Linear Discriminant Analysis and Quadratic Discriminant Analysis improved on the performance of the Naive Bayes model, with F1 Scores of `r results %>% filter(Model == "Linear Discriminant Analysis") %>% dplyr::select(F1) %>% pull()` and `r results %>% filter(Model == "Quadratic Discriminant Analysis") %>% dplyr::select(F1) %>% pull()` respectively. The LDA model achieved a specificity of `r results %>% filter(Model == "Linear Discriminant Analysis") %>% dplyr::select(Specificity) %>% pull()` (FPR of `r results %>% filter(Model == "Linear Discriminant Analysis") %>% dplyr::select(FPR) %>% pull() %>% scales::percent(acuracy = 0.1)`) but this was offset by reduced sensitivity (`r results %>% filter(Model == "Linear Discriminant Analysis") %>% dplyr::select(Sensitivity) %>% pull()`), an unacceptable FNR of `r results %>% filter(Model == "Linear Discriminant Analysis") %>% dplyr::select(FNR) %>% pull() %>% scales::percent(acuracy = 0.1)`.
+
+
+The QDA model delivered a better balance between FNR (`r results %>% filter(Model == "Quadratic Discriminant Analysis") %>% dplyr::select(FNR) %>% pull() %>% scales::percent(acuracy = 0.1)`) and FPR (`r results %>% filter(Model == "Quadratic Discriminant Analysis") %>% dplyr::select(FPR) %>% pull() %>% scales::percent(acuracy = 0.1)`). Of note, dimension reduction through pre-processing the training data with PCA improved the specificity of the QDA model, reducing the FPR to `r results %>% filter(Model == "Quadratic Discriminant Analysis with PCA") %>% dplyr::select(FPR) %>% pull() %>% scales::percent(acuracy = 0.1)` but it reduced the sensitivity, increased the FNR to `r results %>% filter(Model == "Quadratic Discriminant Analysis with PCA") %>% dplyr::select(FNR) %>% pull() %>% scales::percent(acuracy = 0.1)`.  
+
+
+The discriminative models of supervised learning were the best performing models with this dataset. Logistic Regression achieved an overall accuracy of `r results %>% filter(Model == "Logistic Regression") %>% dplyr::select(Accuracy) %>% pull()`. This was improved further to `r results %>% filter(Model == "Logistic Regression With PCA") %>% dplyr::select(Accuracy) %>% pull()` with dimension reduction using PCA by improving the sensitivity of the model, achieving FNR and FPR of only `r results %>% filter(Model == "Logistic Regression With PCA") %>% dplyr::select(FNR) %>% pull() %>% scales::percent(acuracy = 0.1)` and `r results %>% filter(Model == "Logistic Regression With PCA") %>% dplyr::select(FPR) %>% pull() %>% scales::percent(acuracy = 0.1)` respectively.
+
+**$k$NN** model performed best when the number of neighbours, $k$, was defined as `r knn$bestTune[1,1]` (see Figure \ref{fig:cross-validation-tuning-knn}). On this basis, the overall accuracy of `r results %>% filter(Model == "K-Nearest Neighbors") %>% dplyr::select(Accuracy) %>% pull()` but with lower sensitivity (`r results %>% filter(Model == "K-Nearest Neighbors") %>% dplyr::select(Sensitivity) %>% pull()`).
+
+
+```{r cross-validation-tuning-knn, fig.cap = "Tuning results for KNN Model during cross-validation"}
+x_validation_tuning_knn_plot
+```
+
+
+
+**Random Forest** model was not very sensitive to the number of randomly selected predictors included in each decision tree it was tuned for, but performed marginally best when mtry was `r rf$bestTune[1,1]` (see Figure \ref{fig:cross-validation-tuning-rf}), with overall accuracy of `r results %>% filter(Model == "Random Forest") %>% dplyr::select(Accuracy) %>% pull()`, sensitivity of `r results %>% filter(Model == "Random Forest") %>% dplyr::select(Sensitivity) %>% pull()` and specificity of `r results %>% filter(Model == "Random Forest") %>% dplyr::select(Specificity) %>% pull()`.
+
+```{r cross-validation-tuning-rf, fig.cap = "Tuning results for random forest model during cross-validation"}
+x_validation_tuning_rf_plot
+```
+
+
+The final individual model to be  trained and tested was the **Neural Networks**. This performed very well with an overall accuracy of `r results %>% filter(Model == "Neural Networks") %>% dplyr::select(Accuracy) %>% pull()` and an F1 Score of `r results %>% filter(Model == "Neural Networks") %>% dplyr::select(F1) %>% pull()`.   
+
+\newpage
+
+# Conclusion
+
+An accurate and timely diagnosis of breast cancer is still a major problem for proper treatment in the healthcare field. The precise analysis of cancer features is still a time-consuming and challenging task. In this project, several Machine Learning predictive models were developped to detect breast cancer tumors and classify them into benign and malignant tumors. We tried to improve the prediction model’s performance with a maximum F1 Score and a highest accuracy score possible.
+
+We selected the optimal model by selecting a high accuracy/F1 Score level combinated with a low rate of false negatives. **`r number_2_model`** and **`r number_1_model`** both come first with the optimal results (Accuracy = `r results %>% filter(Model == number_1_model) %>% dplyr::select(Accuracy) %>% pull()`, F1 Score = `r results %>% filter(Model == number_1_model) %>% dplyr::select(F1) %>% pull()`, FNR = `r results %>% filter(Model == number_1_model) %>% dplyr::select(FNR) %>% pull() %>% scales::percent(accuracy = 0.1)`). These results confirm the potential of Machine Learning to accurately predict diagnosis of breast cancer using samples obtained via [FNA][linkfna] biopsy, with high levels of both sensitivity and specificity.    
+
+
+\newpage
+
+
+# Appendix - Environment
+```{r}
+print("Operating System:")
+version
+```
+
+
+\newpage
+
+# References
+
+---
+nocite: '@*'
+---
+
+
+
+<!-- ---------------------------------------------------------------------- -->
+
+<!-- web links -->
+[linkwikipediabreastcancerfr]: <https://fr.wikipedia.org/wiki/Cancer_du_sein>
+[linkwdbcdatabase]: <https://archive.ics.uci.edu/ml/datasets/Breast+Cancer+Wisconsin+%28Diagnostic%29>
+[linkfna]: <https://www.cancer.org/cancer/breast-cancer/screening-tests-and-early-detection/breast-biopsy/fine-needle-aspiration-biopsy-of-the-breast.html>
+[linkcaret]: <https://cran.r-project.org/web/packages/caret/index.html>
+
+<!-- ---------------------------------------------------------------------- -->
