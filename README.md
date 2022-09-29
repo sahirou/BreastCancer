@@ -58,7 +58,7 @@ These models were implemented on the [Wisconsin Diagnostic Breast Cancer (WDBC)]
 [gitbublink]: <https://www.github.com/sahirou>
 [twiterlink]: <https://twitter.com/SaniSahirou>
 [facebooklink]: <https://www.facebook.com/sani.sahirou>
-[linkedinlink]: <https://www.linkedin.com/in/sahirou-adamou-mahaman-sani-97b46251>
+[linkedinlink]: <https://www.linkedin.com/in/sani-sahirou>
 
 
 <!-- social media icons -->
